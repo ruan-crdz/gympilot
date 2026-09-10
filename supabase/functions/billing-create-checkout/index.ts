@@ -146,7 +146,15 @@ serve(async (req) => {
     || (mpData.sandbox_init_point as string | undefined)
     || null;
 
-  const providerReference = (mpData.id as string | undefined) || externalReference;
+  if (!checkoutUrl) {
+    return jsonResponse({
+      error: {
+        message: 'Mercado Pago não retornou URL de checkout válida para este pagamento.',
+      },
+    }, 502);
+  }
+
+  const providerReference = externalReference;
 
   await serviceClient.from('billing_checkout_sessions').insert({
     user_id: user.id,

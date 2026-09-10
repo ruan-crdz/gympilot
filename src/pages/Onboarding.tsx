@@ -683,6 +683,7 @@ export function Onboarding({ onBack }: OnboardingProps) {
                     <div>
                       <p className="font-bold text-lg">Montar com IA</p>
                       <p className="text-white/50 text-sm">A inteligência artificial monta o treino ideal pra você com justificativa científica</p>
+                      <p className="text-amber-300/90 text-xs mt-1">Teste grátis: você tem 1 montagem de treino com IA no plano Free.</p>
                     </div>
                   </div>
                 </button>

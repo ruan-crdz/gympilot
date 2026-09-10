@@ -14,6 +14,7 @@ import type { Exercise, WorkoutType } from '@/types';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { CustomSelect } from '@/components/ui/CustomSelect';
 import { WORKOUT_BUILDER_SCHEMA, WORKOUT_SWAP_SCHEMA } from '@/constants/aiSchemas';
+import { resolveAIPlan } from '@/constants/aiPlan';
 
 interface CatalogItem {
   name: string;
@@ -103,6 +104,7 @@ export function WorkoutPlans() {
   const aiEnabled = useAIStore((s) => s.isEnabled);
   const profile = useProfileStore((s) => s.profile);
   const toast = useToastStore((s) => s.show);
+  const aiPlan = resolveAIPlan(profile);
 
   const activeTypes = editing ? draftSlots : activeSlots;
 
@@ -814,9 +816,17 @@ ESCOLHA OBRIGATORIAMENTE um destes: ${available.join(', ')}`;
                   onClick={handleAIBuild}
                   className="flex-1 py-2.5 rounded-xl bg-primary-500/10 border border-primary-500/20 text-primary-300 text-xs font-medium"
                 >
-                  <MaterialIcon name="smart_toy" /> IA Inteligente
+                  <MaterialIcon name="smart_toy" /> {aiPlan === 'ultimate' ? 'IA Inteligente' : 'Montar com IA (Free: 1 uso)'}
                 </button>
               )}
+            </div>
+          )}
+
+          {aiPlan === 'free' && (
+            <div className="card border-amber-300/25 bg-amber-500/10">
+              <p className="text-xs text-amber-100/90 leading-relaxed">
+                No Free, você tem 1 montagem de treino com IA. Depois desse uso, os recursos de IA ficam exclusivos do Ultimate.
+              </p>
             </div>
           )}
 

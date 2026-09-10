@@ -1312,11 +1312,23 @@ create table if not exists public.billing_checkout_sessions (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.user_ai_free_trials (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  trial_session_id text not null,
+  trial_call_count int not null default 0,
+  trial_expires_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists user_ai_subscriptions_user_status_idx
   on public.user_ai_subscriptions (user_id, status, current_period_end desc, updated_at desc);
 
 create index if not exists billing_checkout_sessions_user_created_idx
   on public.billing_checkout_sessions (user_id, created_at desc);
+
+create index if not exists user_ai_free_trials_expires_idx
+  on public.user_ai_free_trials (trial_expires_at);
 
 drop trigger if exists user_ai_subscriptions_touch_updated_at on public.user_ai_subscriptions;
 create trigger user_ai_subscriptions_touch_updated_at
@@ -1328,13 +1340,20 @@ create trigger billing_checkout_sessions_touch_updated_at
   before update on public.billing_checkout_sessions
   for each row execute function public.workout_touch_updated_at();
 
+drop trigger if exists user_ai_free_trials_touch_updated_at on public.user_ai_free_trials;
+create trigger user_ai_free_trials_touch_updated_at
+  before update on public.user_ai_free_trials
+  for each row execute function public.workout_touch_updated_at();
+
 alter table public.app_admins enable row level security;
 alter table public.user_ai_subscriptions enable row level security;
 alter table public.billing_checkout_sessions enable row level security;
+alter table public.user_ai_free_trials enable row level security;
 
 drop policy if exists "admins read own membership" on public.app_admins;
 drop policy if exists "users read own subscriptions" on public.user_ai_subscriptions;
 drop policy if exists "users read own checkout sessions" on public.billing_checkout_sessions;
+drop policy if exists "users read own free ai trial" on public.user_ai_free_trials;
 
 create policy "admins read own membership"
   on public.app_admins for select
@@ -1348,6 +1367,11 @@ create policy "users read own subscriptions"
 
 create policy "users read own checkout sessions"
   on public.billing_checkout_sessions for select
+  to authenticated
+  using (user_id = auth.uid());
+
+create policy "users read own free ai trial"
+  on public.user_ai_free_trials for select
   to authenticated
   using (user_id = auth.uid());
 
@@ -1478,6 +1502,7 @@ $$;
 grant select on public.app_admins to authenticated;
 grant select on public.user_ai_subscriptions to authenticated;
 grant select on public.billing_checkout_sessions to authenticated;
+grant select on public.user_ai_free_trials to authenticated;
 grant execute on function public.get_my_ai_plan() to authenticated;
 grant execute on function public.set_user_ai_plan_manual(uuid, text, int, text) to authenticated;
 

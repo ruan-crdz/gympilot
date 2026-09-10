@@ -20,12 +20,11 @@ const corsHeaders = {
 };
 
 const FREE_FEATURES = new Set<AIFeature>([
-  'chat',
-  'dashboard_insight',
-  'workout_tip',
-  'meal_calc',
   'workout_builder',
 ]);
+
+const FREE_WORKOUT_TRIAL_MAX_CALLS = 6;
+const FREE_WORKOUT_TRIAL_WINDOW_MINUTES = 30;
 
 function jsonResponse(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -114,6 +113,58 @@ serve(async (req) => {
   }
 
   const payload = body.payload || {};
+  const trialSessionId = typeof payload.trial_session_id === 'string'
+    ? payload.trial_session_id.trim()
+    : '';
+  let trialCallCount = 0;
+
+  if (plan === 'free' && feature === 'workout_builder') {
+    const now = new Date();
+
+    const { data: trialRow } = await serviceClient
+      .from('user_ai_free_trials')
+      .select('trial_session_id, trial_call_count, trial_expires_at')
+      .eq('user_id', userData.user.id)
+      .maybeSingle();
+
+    if (!trialRow) {
+      if (!trialSessionId) {
+        return jsonResponse({
+          error: {
+            message: 'Não conseguimos iniciar seu teste grátis de IA. Tente novamente pelo app.',
+          },
+        }, 400);
+      }
+
+      const trialExpiresAt = new Date(now.getTime() + FREE_WORKOUT_TRIAL_WINDOW_MINUTES * 60_000).toISOString();
+      await serviceClient
+        .from('user_ai_free_trials')
+        .insert({
+          user_id: userData.user.id,
+          trial_session_id: trialSessionId,
+          trial_call_count: 0,
+          trial_expires_at: trialExpiresAt,
+        });
+      trialCallCount = 0;
+    } else {
+      const isExpired = trialRow.trial_expires_at
+        ? new Date(trialRow.trial_expires_at).getTime() < now.getTime()
+        : true;
+
+      const sessionMatches = !!trialSessionId && trialRow.trial_session_id === trialSessionId;
+      trialCallCount = Number(trialRow.trial_call_count || 0);
+      const callsExceeded = trialCallCount >= FREE_WORKOUT_TRIAL_MAX_CALLS;
+
+      if (isExpired || !sessionMatches || callsExceeded) {
+        return jsonResponse({
+          error: {
+            message: 'Você já usou seu treino grátis com IA. Para continuar, assine o GymPilot Ultimate.',
+          },
+        }, 402);
+      }
+    }
+  }
+
   const messages = payload.messages;
   if (!Array.isArray(messages) || messages.length === 0) {
     return jsonResponse({ error: { message: 'Mensagens não informadas.' } }, 400);
@@ -133,8 +184,10 @@ serve(async (req) => {
     ? payload.max_tokens
     : undefined;
 
+  const { trial_session_id: _trialSessionId, ...providerPayload } = payload;
+
   const safePayload: Record<string, unknown> = {
-    ...payload,
+    ...providerPayload,
     model,
     stream: false,
   };
@@ -176,6 +229,15 @@ serve(async (req) => {
           message: providerError || `Falha no provedor de IA (${response.status}).`,
         },
       });
+    }
+
+    if (plan === 'free' && feature === 'workout_builder') {
+      await serviceClient
+        .from('user_ai_free_trials')
+        .update({
+          trial_call_count: trialCallCount + 1,
+        })
+        .eq('user_id', userData.user.id);
     }
 
     return jsonResponse(parsed);

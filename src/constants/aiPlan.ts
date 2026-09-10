@@ -14,10 +14,6 @@ export type AIFeature =
   | 'plan_reeval';
 
 const FREE_FEATURES = new Set<AIFeature>([
-  'chat',
-  'dashboard_insight',
-  'workout_tip',
-  'meal_calc',
   'workout_builder',
 ]);
 
@@ -42,6 +38,9 @@ export function isAIFeatureEnabled(plan: AIPlan, feature: AIFeature): boolean {
 }
 
 export function getUpgradeMessage(feature: AIFeature): string {
+  if (feature === 'workout_builder') {
+    return 'Você já usou seu treino grátis com IA. Para continuar com IA, assine o GymPilot Ultimate.';
+  }
   return `${FEATURE_LABELS[feature]} faz parte do GymPilot Ultimate.`;
 }
 

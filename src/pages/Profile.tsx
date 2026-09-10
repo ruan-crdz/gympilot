@@ -623,7 +623,7 @@ export function Profile() {
                   )}
                 </div>
                 <p className="text-[11px] text-white/40 leading-relaxed">
-                  O plano Free inclui chat e dicas rápidas. Ultimate libera reavaliação avançada, relatório semanal e análise de refeição por foto.
+                  No Free, você tem 1 montagem de treino com IA. Depois disso, os recursos de IA ficam exclusivos do Ultimate.
                 </p>
                 {aiPlan === 'free' && (
                   <div className="space-y-2">
@@ -638,9 +638,9 @@ export function Profile() {
                     <button
                       onClick={() => { void handleUpgradeToUltimate('annual'); }}
                       disabled={upgradingPlan}
-                      className="w-full py-2.5 rounded-xl bg-white/10 border border-white/15 text-white/75 text-xs font-semibold disabled:opacity-50"
+                      className="w-full py-2.5 rounded-xl bg-primary-500/15 border border-primary-500/35 text-primary-200 text-xs font-semibold disabled:opacity-50"
                     >
-                      Anual com desconto
+                      Assinar Ultimate anual (desconto)
                     </button>
                   </div>
                 )}

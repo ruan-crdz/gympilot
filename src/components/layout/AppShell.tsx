@@ -2,6 +2,8 @@ import { ReactNode, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAIStore } from '@/stores/useAIStore';
+import { useProfileStore } from '@/stores/useProfileStore';
+import { resolveAIPlan } from '@/constants/aiPlan';
 import { ToastContainer } from '@/components/ui/ToastContainer';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { supabase } from '@/lib/supabase';
@@ -14,6 +16,8 @@ export function AppShell({ children }: AppShellProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const aiEnabled = useAIStore((s) => s.isEnabled);
+  const profile = useProfileStore((s) => s.profile);
+  const aiPlan = resolveAIPlan(profile);
   const [unreadChats, setUnreadChats] = useState(0);
 
   useEffect(() => {
@@ -78,13 +82,24 @@ export function AppShell({ children }: AppShellProps) {
     { path: '/plans', icon: 'fitness_center', label: 'Treino' },
     { path: '/health', icon: 'restaurant', label: 'Saúde' },
     { path: '/social', icon: 'groups', label: 'Social' },
-    ...(aiEnabled ? [{ path: '/ai', icon: 'bolt', label: 'IA' }] : []),
+    ...(aiEnabled && aiPlan === 'ultimate' ? [{ path: '/ai', icon: 'bolt', label: 'IA' }] : []),
     { path: '/profile', icon: 'person', label: 'Perfil' },
   ];
 
   return (
     <div className="flex flex-col min-h-[100dvh]">
       <ToastContainer />
+      {aiPlan === 'free' && (
+        <div className="px-3 pt-2">
+          <button
+            onClick={() => navigate('/profile')}
+            className="w-full rounded-xl border border-primary-500/25 bg-primary-500/10 px-3 py-2 text-left"
+          >
+            <p className="text-[11px] font-semibold text-primary-300">Ultimate libera IA completa</p>
+            <p className="text-[10px] text-white/60">Reavaliação inteligente, foto de refeição e ajustes avançados de treino.</p>
+          </button>
+        </div>
+      )}
       <main className="flex-1 overflow-y-auto pb-[92px]">
         {children}
       </main>

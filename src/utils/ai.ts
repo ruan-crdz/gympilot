@@ -483,6 +483,22 @@ interface InvokeAIOptions {
   feature?: AIFeature;
 }
 
+const FREE_WORKOUT_TRIAL_SESSION_KEY = 'gympilot-free-workout-trial-session-id';
+
+function getFreeWorkoutTrialSessionId(): string {
+  try {
+    const existing = window.localStorage.getItem(FREE_WORKOUT_TRIAL_SESSION_KEY);
+    if (existing) return existing;
+    const generated = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `trial_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    window.localStorage.setItem(FREE_WORKOUT_TRIAL_SESSION_KEY, generated);
+    return generated;
+  } catch {
+    return `trial_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
+
 interface OpenAIChoice {
   finish_reason?: string;
   message?: {
@@ -512,10 +528,17 @@ export async function invokeAI(
     throw new Error(getUpgradeMessage(feature));
   }
 
+  const payloadWithTrial = plan === 'free' && feature === 'workout_builder'
+    ? {
+      ...payload,
+      trial_session_id: getFreeWorkoutTrialSessionId(),
+    }
+    : payload;
+
   const { data, error } = await supabase.functions.invoke('ai-gateway', {
     body: {
       feature,
-      payload,
+      payload: payloadWithTrial,
     },
   });
 

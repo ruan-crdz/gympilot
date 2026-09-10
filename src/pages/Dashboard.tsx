@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useProfileStore } from '@/stores/useProfileStore';
@@ -26,7 +26,7 @@ import { useHealthIntegrationStore } from '@/stores/useHealthIntegrationStore';
 import { useNotesStore } from '@/stores/useNotesStore';
 import { useRecoveryStore } from '@/stores/useRecoveryStore';
 import { computeReadiness, READINESS_WEIGHTS } from '@/utils/readiness';
-import type { WorkoutType } from '@/types';
+import type { Exercise, WorkoutType } from '@/types';
 import type { ActivityIntensity, ActivityLocation } from '@/types';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { CustomSelect } from '@/components/ui/CustomSelect';
@@ -34,13 +34,37 @@ import { CustomDatePicker } from '@/components/ui/CustomDatePicker';
 
 type DashboardHistory = 'consistency' | 'load' | 'calories' | 'water' | 'bmi' | 'weight' | null;
 
-function getWorkoutMeta(type?: string | null): { label: string; focus: string } {
-  const normalized = typeof type === 'string' ? type.toUpperCase() : '';
-  const mapped = (WORKOUT_MAP as Record<string, { label: string; focus: string } | undefined>)[normalized];
-  return {
-    label: mapped?.label || `Treino ${normalized || 'A'}`,
-    focus: mapped?.focus || 'Treino personalizado',
-  };
+function isWorkoutType(value: string): value is WorkoutType {
+  return value === 'A' || value === 'B' || value === 'C' || value === 'D' || value === 'E';
+}
+
+function deriveFocusFromExercises(exercises: Exercise[]): string {
+  if (!Array.isArray(exercises) || exercises.length === 0) return 'Treino personalizado';
+  const groups = exercises
+    .map((e) => e.muscleGroup?.toLowerCase().trim())
+    .filter((group): group is string => Boolean(group));
+
+  const upper = ['costas', 'peitoral', 'ombro', 'bíceps', 'biceps', 'tríceps', 'triceps'];
+  const lower = ['quadríceps', 'quadriceps', 'posterior', 'glúte', 'glute', 'panturrilha'];
+  const upperCount = groups.filter((g) => upper.some((u) => g.includes(u))).length;
+  const lowerCount = groups.filter((g) => lower.some((l) => g.includes(l))).length;
+  const total = groups.length;
+
+  if (total === 0) return 'Treino personalizado';
+  if (upperCount >= total * 0.7) return 'Superior';
+  if (lowerCount >= total * 0.7) return 'Inferior';
+  if (upperCount > 0 && lowerCount > 0) return 'Full Body';
+
+  const frequency: Record<string, number> = {};
+  groups.forEach((group) => {
+    frequency[group] = (frequency[group] || 0) + 1;
+  });
+  const top = Object.entries(frequency)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .map(([group]) => group.charAt(0).toUpperCase() + group.slice(1));
+
+  return top.join(' + ') || 'Treino personalizado';
 }
 
 export function Dashboard() {
@@ -61,6 +85,7 @@ export function Dashboard() {
   const healthDaily = useHealthIntegrationStore((s) => s.daily);
   const notes = useNotesStore((s) => s.notes);
   const activeSlots = useCustomWorkoutStore((s) => s.activeSlots);
+  const getExercises = useCustomWorkoutStore((s) => s.getExercises);
   const checkins = useRecoveryStore((s) => s.checkins);
   const widgets = useDashboardStore((s) => s.widgets);
   const toggleWidget = useDashboardStore((s) => s.toggleWidget);
@@ -121,6 +146,33 @@ export function Dashboard() {
   const weeklyProgress = Math.min(weeklyCompleted / targetWeeklySessions, 1);
   const nextWorkoutType = activeSlots[structuredSessions.length % Math.max(activeSlots.length, 1)] || 'A';
   const isActiveSessionValid = Boolean(activeSession && activeSlots.includes(activeSession.workoutType));
+  const workoutMetaByType = useMemo<Record<WorkoutType, { label: string; focus: string }>>(() => {
+    const types: WorkoutType[] = ['A', 'B', 'C', 'D', 'E'];
+    const entries = types.map((type) => {
+      const mapped = WORKOUT_MAP[type];
+      const customLabel = profile.customSplit?.[type]?.trim();
+      const exercises = getExercises(type);
+      const derivedFocus = deriveFocusFromExercises(exercises);
+      return [
+        type,
+        {
+          label: customLabel || mapped?.label || `Treino ${type}`,
+          focus: derivedFocus || mapped?.focus || 'Treino personalizado',
+        },
+      ] as const;
+    });
+
+    return Object.fromEntries(entries) as Record<WorkoutType, { label: string; focus: string }>;
+  }, [getExercises, profile.customSplit]);
+
+  const getWorkoutMeta = (type?: string | null): { label: string; focus: string } => {
+    const normalized = typeof type === 'string' ? type.toUpperCase() : '';
+    if (isWorkoutType(normalized)) {
+      return workoutMetaByType[normalized];
+    }
+    return { label: 'Treino', focus: 'Treino personalizado' };
+  };
+
   const activeWorkoutMeta = getWorkoutMeta(isActiveSessionValid ? activeSession?.workoutType : null);
   const todayWorkoutMeta = getWorkoutMeta(todayWorkout);
   const todayCheckin = checkins[today];
@@ -274,7 +326,8 @@ export function Dashboard() {
               >
                 <MaterialIcon name="fitness_center" className="text-lg text-primary-300 mx-auto mb-1" />
                 <span className="text-2xl font-bold text-primary-400">{type}</span>
-                <p className="text-[10px] text-white/40 mt-1">{WORKOUT_MAP[type]?.focus || `Treino ${type}`}</p>
+                <p className="text-[10px] text-white/40 mt-1">{workoutMetaByType[type].label}</p>
+                <p className="text-[10px] text-primary-400/70 mt-0.5">{workoutMetaByType[type].focus}</p>
               </motion.button>
             ))}
           </div>
