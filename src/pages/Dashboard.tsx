@@ -85,6 +85,7 @@ export function Dashboard() {
   const healthDaily = useHealthIntegrationStore((s) => s.daily);
   const notes = useNotesStore((s) => s.notes);
   const activeSlots = useCustomWorkoutStore((s) => s.activeSlots);
+  const customWorkouts = useCustomWorkoutStore((s) => s.customWorkouts);
   const getExercises = useCustomWorkoutStore((s) => s.getExercises);
   const checkins = useRecoveryStore((s) => s.checkins);
   const widgets = useDashboardStore((s) => s.widgets);
@@ -163,7 +164,7 @@ export function Dashboard() {
     });
 
     return Object.fromEntries(entries) as Record<WorkoutType, { label: string; focus: string }>;
-  }, [getExercises, profile.customSplit]);
+  }, [customWorkouts, getExercises, profile.customSplit]);
 
   const getWorkoutMeta = (type?: string | null): { label: string; focus: string } => {
     const normalized = typeof type === 'string' ? type.toUpperCase() : '';
