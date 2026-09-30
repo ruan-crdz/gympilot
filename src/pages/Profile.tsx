@@ -74,16 +74,37 @@ export function Profile() {
     if (!supabase) return;
     const client = supabase;
     let cancelled = false;
-    void client.auth.getUser().then(async ({ data }) => {
-      if (!data.user) return;
-      const { data: admin } = await client
+    let requestId = 0;
+
+    const checkAdmin = async (userId?: string) => {
+      const currentRequest = ++requestId;
+      setIsAdmin(false);
+      if (!userId) return;
+
+      const { data: admin, error } = await client
         .from('app_admins')
         .select('user_id')
-        .eq('user_id', data.user.id)
+        .eq('user_id', userId)
         .maybeSingle();
-      if (!cancelled) setIsAdmin(Boolean(admin));
+
+      if (!cancelled && currentRequest === requestId) {
+        setIsAdmin(!error && admin?.user_id === userId);
+      }
+    };
+
+    void client.auth.getUser().then(({ data }) => {
+      void checkAdmin(data.user?.id);
     });
-    return () => { cancelled = true; };
+
+    const { data: authListener } = client.auth.onAuthStateChange((_event, session) => {
+      window.setTimeout(() => void checkAdmin(session?.user.id), 0);
+    });
+
+    return () => {
+      cancelled = true;
+      requestId += 1;
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
