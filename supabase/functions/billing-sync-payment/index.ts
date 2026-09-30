@@ -83,7 +83,6 @@ serve(async (req) => {
     .from('billing_checkout_sessions')
     .update({
       status: status === 'approved' ? 'approved' : status,
-      provider_payment_id: paymentId || null,
       provider_payload: payment,
     })
     .eq('id', checkout.id);

@@ -102,7 +102,6 @@ serve(async (req) => {
 
   const checkoutUpdate: Record<string, unknown> = {
     status: status === 'approved' ? 'approved' : (status === 'pending' ? 'pending' : 'rejected'),
-    provider_payment_id: String(paymentId),
     provider_payload: payment,
   };
 
