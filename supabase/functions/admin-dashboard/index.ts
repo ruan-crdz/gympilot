@@ -14,6 +14,7 @@ function jsonResponse(payload: unknown, status = 200) {
 }
 
 serve(async (req) => {
+ try {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: { message: 'Metodo nao permitido.' } }, 405);
 
@@ -55,7 +56,10 @@ serve(async (req) => {
   ]);
 
   const queryError = snapshotsResult.error || subscriptionsResult.error || checkoutsResult.error || programsResult.error || postsResult.error || commentsResult.error;
-  if (queryError) return jsonResponse({ error: { message: 'Falha ao calcular metricas.' } }, 500);
+  if (queryError) {
+    console.error('admin-dashboard query failed', queryError);
+    return jsonResponse({ error: { message: `Falha ao calcular métricas: ${queryError.message}` } }, 500);
+  }
 
   const snapshots = snapshotsResult.data || [];
   const subscriptions = subscriptionsResult.data || [];
@@ -124,4 +128,9 @@ serve(async (req) => {
       comments: commentsResult.count || 0,
     },
   });
+ } catch (error) {
+   console.error('admin-dashboard unexpected failure', error);
+   const detail = error instanceof Error ? error.message : 'erro desconhecido';
+   return jsonResponse({ error: { message: `Falha inesperada no painel: ${detail}` } }, 500);
+ }
 });

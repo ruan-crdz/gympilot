@@ -22,7 +22,13 @@ export function AdminDashboard() {
     setError('');
     const { data, error: requestError } = await supabase.functions.invoke('admin-dashboard', { body: {} });
     if (requestError || !data?.success) {
-      setError(data?.error?.message || requestError?.message || 'Não foi possível carregar o painel.');
+      let message = data?.error?.message || '';
+      const context = requestError && 'context' in requestError ? requestError.context : null;
+      if (!message && context instanceof Response) {
+        const payload = await context.clone().json().catch(() => null);
+        message = payload?.error?.message || '';
+      }
+      setError(message || 'Não foi possível carregar o painel administrativo. Entre novamente e tente de novo.');
       setLoading(false);
       return;
     }
