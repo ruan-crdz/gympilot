@@ -13,17 +13,11 @@ import { CustomSelect } from '@/components/ui/CustomSelect';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { supabase } from '@/lib/supabase';
 import { createUltimateCheckout, syncLatestPayment, syncPlanFromBackend } from '@/lib/billing';
-import { calculateTDEE, calculateMacros, calculateBMI, bmiCategory } from '@/utils/calories';
+import { calculateTDEE, calculateMacros, calculateBMI } from '@/utils/calories';
 import { calculateWaterIntake } from '@/utils/water';
 import { clearGymPilotLocalData } from '@/utils/resetAppData';
 import { parseCsvList, toPositiveIntOrFallback } from '@/utils/profileMapping';
 import type { WeekDay, Goal, BiologicalSex, ExperienceLevel, TrainingLocation } from '@/types';
-
-const TRAINING_LOCATION_LABELS: Record<TrainingLocation, string> = {
-  academia: 'Academia',
-  casa: 'Casa',
-  hibrido: 'Híbrido',
-};
 
 const PENDING_BILLING_KEY = 'gympilot-pending-billing';
 
@@ -48,6 +42,9 @@ export function Profile() {
   } = useAccessibilityStore();
   const { phase, setPhase } = useCycleStore();
   const [editing, setEditing] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<'health' | 'appearance' | 'ai' | 'account' | null>(null);
+  const [showAccountManagement, setShowAccountManagement] = useState(false);
   const [accountAction, setAccountAction] = useState<'delete' | null>(null);
   const [processingAccountAction, setProcessingAccountAction] = useState(false);
   const [upgradingPlan, setUpgradingPlan] = useState(false);
@@ -189,6 +186,26 @@ export function Profile() {
     setEditing(false);
   };
 
+  const openEditor = () => {
+    setName(profile.name);
+    setSex(profile.sex || 'undisclosed');
+    setAge(String(profile.age || ''));
+    setWeight(String(profile.weight || ''));
+    setHeight(String(profile.height || ''));
+    setGoal(profile.goal);
+    setExperience(profile.experienceLevel || 'beginner');
+    setDays(profile.trainingDays || []);
+    setSessionDurationMin(String(profile.sessionDurationMin || 60));
+    setTrainingLocation(profile.trainingLocation || 'academia');
+    setTrainingAgeMonths(String(profile.trainingAgeMonths ?? ''));
+    setEquipmentAccess((profile.equipmentAccess || []).join(', '));
+    setPreferredExercises((profile.preferredExercises || []).join(', '));
+    setDislikedExercises((profile.dislikedExercises || []).join(', '));
+    setLimitations((profile.limitations || []).join(', '));
+    setShowSettings(false);
+    setEditing(true);
+  };
+
   const redirectToAppRoot = () => {
     window.location.href = import.meta.env.BASE_URL || '/';
   };
@@ -240,21 +257,149 @@ export function Profile() {
     }
   };
 
+  if (!editing && !showSettings) {
+    const goalOption = GOAL_OPTIONS.find((option) => option.value === profile.goal);
+
+    return (
+      <div className="gym-page">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="gym-kicker">Sua conta</p>
+            <h1 className="gym-title mt-1">Perfil</h1>
+          </div>
+          <button
+            onClick={() => setShowSettings(true)}
+            className="gym-icon-tile"
+            aria-label="Abrir configurações"
+          >
+            <MaterialIcon name="settings" className="text-xl" />
+          </button>
+        </div>
+
+        <section className="relative overflow-hidden rounded-2xl border border-primary-500/20 bg-[rgb(var(--color-bg-card-rgb))] p-5">
+          <div className="absolute inset-x-0 top-0 h-1 bg-primary-500" />
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary-500 text-2xl font-black text-black">
+              {profile.name.trim().charAt(0).toUpperCase() || 'G'}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="truncate text-xl font-black text-white">{profile.name}</h2>
+                <span className={`rounded-full border px-2 py-1 text-[10px] font-black ${
+                  aiPlan === 'ultimate'
+                    ? 'border-primary-500/40 bg-primary-500/15 text-primary-300'
+                    : 'border-white/10 bg-white/5 text-white/45'
+                }`}>
+                  {planLabel(aiPlan)}
+                </span>
+              </div>
+              <p className="mt-1 flex items-center gap-1.5 text-sm text-white/50">
+                <MaterialIcon name={goalOption?.icon || 'track_changes'} className="text-base text-primary-300" />
+                {goalOption?.label}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 grid grid-cols-3 divide-x divide-white/10 border-t border-white/10 pt-4 text-center">
+            <ProfileMetric label="Peso" value={`${profile.weight} kg`} />
+            <ProfileMetric label="IMC" value={String(bmi)} />
+            <ProfileMetric label="Treinos" value={`${profile.trainingDays.length}x`} />
+          </div>
+        </section>
+
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={openEditor}
+            className="flex min-h-24 flex-col items-start justify-between rounded-xl border border-white/10 bg-[rgb(var(--color-bg-card-rgb))] p-4 text-left"
+          >
+            <MaterialIcon name="edit" className="text-2xl text-primary-300" />
+            <span className="text-sm font-bold text-white/80">Editar perfil</span>
+          </button>
+          <button
+            onClick={() => setShowSettings(true)}
+            className="flex min-h-24 flex-col items-start justify-between rounded-xl border border-white/10 bg-[rgb(var(--color-bg-card-rgb))] p-4 text-left"
+          >
+            <MaterialIcon name="tune" className="text-2xl text-primary-300" />
+            <span className="text-sm font-bold text-white/80">Configurações</span>
+          </button>
+        </div>
+
+        <section className="card space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase text-white/35">Metas diárias</p>
+              <p className="mt-1 text-sm text-white/60">Calculadas a partir do seu perfil</p>
+            </div>
+            <MaterialIcon name="track_changes" className="text-2xl text-primary-300" />
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <CompactGoal label="Calorias" value={`${calories}`} unit="kcal" />
+            <CompactGoal label="Proteína" value={`${macros.protein}`} unit="g" />
+            <CompactGoal label="Água" value={`${water}`} unit="L" />
+          </div>
+        </section>
+
+        <button
+          onClick={() => setShowSettings(true)}
+          className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-4 py-4 text-left"
+        >
+          <span className="flex items-center gap-3">
+            <MaterialIcon name="workspace_premium" className="text-xl text-primary-300" />
+            <span>
+              <span className="block text-sm font-bold text-white/80">GymPilot {planLabel(aiPlan)}</span>
+              <span className="block text-xs text-white/35">Plano, IA e preferências</span>
+            </span>
+          </span>
+          <MaterialIcon name="chevron_right" className="text-white/30" />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="gym-page">
       <div className="flex items-center justify-between">
-        <div>
-          <p className="gym-kicker">Conta e preferências</p>
-          <h1 className="gym-title mt-1">Perfil</h1>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              if (!editing && settingsSection) {
+                setSettingsSection(null);
+              } else {
+                setEditing(false);
+                setShowSettings(false);
+                setSettingsSection(null);
+              }
+            }}
+            className="gym-icon-tile"
+            aria-label="Voltar para o perfil"
+          >
+            <MaterialIcon name="arrow_back" className="text-xl" />
+          </button>
+          <div>
+            <p className="gym-kicker">Perfil</p>
+            <h1 className="text-xl font-black">
+              {editing
+                ? 'Editar perfil'
+                : settingsSection === 'health'
+                  ? 'Saúde'
+                  : settingsSection === 'appearance'
+                    ? 'Aparência e acesso'
+                    : settingsSection === 'ai'
+                      ? 'IA e plano'
+                      : settingsSection === 'account'
+                        ? 'Conta'
+                        : 'Configurações'}
+            </h1>
+          </div>
         </div>
-        <button
-          onClick={() => (editing ? handleSave() : setEditing(true))}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-            editing ? 'bg-primary-500 text-black shadow-lg shadow-primary-500/20' : 'bg-white/5 text-white/60 border border-white/10'
-          }`}
-        >
-          {editing ? 'Salvar' : 'Editar'}
-        </button>
+        {editing && (
+          <button
+            onClick={handleSave}
+            className="rounded-xl bg-primary-500 px-4 py-2 text-sm font-black text-black shadow-lg shadow-primary-500/20"
+          >
+            Salvar
+          </button>
+        )}
       </div>
 
       {editing ? (
@@ -441,61 +586,17 @@ export function Profile() {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="card">
-            <div className="grid grid-cols-2 gap-4">
-              <Stat label="Idade" value={`${profile.age} anos`} />
-              <Stat label="Peso" value={`${profile.weight} kg`} />
-              <Stat label="Altura" value={`${profile.height} cm`} />
-              <Stat label="IMC" value={`${bmi} — ${bmiCategory(bmi)}`} />
+          {settingsSection === null && (
+            <div className="card overflow-hidden p-0">
+              <SettingsRow icon="health_and_safety" title="Saúde" description="Ciclo e preferências pessoais" onClick={() => setSettingsSection('health')} />
+              <SettingsRow icon="palette" title="Aparência e acessibilidade" description="Tema, fonte, contraste e movimento" onClick={() => setSettingsSection('appearance')} />
+              <SettingsRow icon="smart_toy" title="IA e plano" description={`${assistantName}, personalidade e ${planLabel(aiPlan)}`} onClick={() => setSettingsSection('ai')} />
+              <SettingsRow icon="manage_accounts" title="Conta" description="Dados e ações avançadas" onClick={() => setSettingsSection('account')} last />
             </div>
-          </div>
-
-          <div className="card space-y-3">
-            <h2 className="font-semibold text-white/80">Objetivo</h2>
-            <p className="text-lg">
-              <span className="inline-flex items-center gap-2"><MaterialIcon name={GOAL_OPTIONS.find((o) => o.value === profile.goal)?.icon || 'track_changes'} className="text-primary-300" /> {GOAL_OPTIONS.find((o) => o.value === profile.goal)?.label}</span>
-            </p>
-          </div>
-
-          <div className="card space-y-3">
-            <h2 className="font-semibold text-white/80">Metas nutricionais</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <Stat label="Calorias" value={`${calories} kcal`} />
-              <Stat label="Água" value={`${water}L`} />
-              <Stat label="Proteína" value={`${macros.protein}g`} />
-              <Stat label="Carboidratos" value={`${macros.carbs}g`} />
-              <Stat label="Gorduras" value={`${macros.fat}g`} />
-            </div>
-          </div>
-
-          <div className="card space-y-3">
-            <h2 className="font-semibold text-white/80">Dias de treino</h2>
-            <div className="flex gap-2 flex-wrap">
-              {profile.trainingDays.map((day) => (
-                <span
-                  key={day}
-                  className="px-3 py-1 bg-primary-500/20 text-primary-300 rounded-full text-sm font-medium"
-                >
-                  {WEEKDAY_OPTIONS.find((o) => o.value === day)?.label}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="card space-y-3">
-            <h2 className="font-semibold text-white/80">Contexto de treino</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <Stat label="Tempo por sessão" value={`${profile.sessionDurationMin || 60} min`} />
-              <Stat label="Local" value={TRAINING_LOCATION_LABELS[profile.trainingLocation || 'academia']} />
-              <Stat label="Training age" value={`${profile.trainingAgeMonths || 0} meses`} />
-            </div>
-            <p className="text-xs text-white/45">Equipamentos: {(profile.equipmentAccess || []).join(', ') || 'Não informado'}</p>
-            <p className="text-xs text-white/45">Preferidos: {(profile.preferredExercises || []).join(', ') || 'Não informado'}</p>
-            <p className="text-xs text-white/45">Evita: {(profile.dislikedExercises || []).join(', ') || 'Não informado'}</p>
-            <p className="text-xs text-white/45">Limitações: {(profile.limitations || []).join(', ') || 'Não informado'}</p>
-          </div>
+          )}
 
           {/* Cycle Phase */}
+          {settingsSection === 'health' && (
           <div className="card space-y-3">
             <h2 className="font-semibold text-white/80 flex items-center gap-2"><MaterialIcon name="autorenew" className="text-primary-300" /> Fase do ciclo</h2>
             <div className="grid grid-cols-2 gap-2">
@@ -519,8 +620,11 @@ export function Profile() {
               </p>
             )}
           </div>
+          )}
 
           {/* Theme Section */}
+          {settingsSection === 'appearance' && (
+          <>
           <div className="card space-y-3">
             <h2 className="font-semibold text-white/80 flex items-center gap-2"><MaterialIcon name="palette" className="text-primary-300" /> Tema</h2>
             <div className="grid grid-cols-5 gap-2">
@@ -616,8 +720,11 @@ export function Profile() {
               Restaurar acessibilidade padrão
             </button>
           </div>
+          </>
+          )}
 
           {/* AI Section */}
+          {settingsSection === 'ai' && (
           <div className="card space-y-3 border border-primary-500/20">
             <div className="flex items-center gap-2">
               <MaterialIcon name="smart_toy" className="text-xl text-primary-300" />
@@ -713,19 +820,44 @@ export function Profile() {
               )}
             </div>
           </div>
+          )}
 
-          <div className="card space-y-3 border border-red-500/25">
-            <h2 className="font-semibold text-white/85">Conta</h2>
-            <p className="text-xs text-white/45">A exclusão remove sua conta e dados vinculados no Supabase.</p>
-
+          {settingsSection === 'account' && (
+          <div className="card p-0 overflow-hidden">
             <button
-              onClick={() => setAccountAction('delete')}
-              disabled={processingAccountAction}
-              className="w-full py-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-sm font-semibold disabled:opacity-50"
+              onClick={() => setShowAccountManagement((current) => !current)}
+              className="flex w-full items-center justify-between px-4 py-4 text-left"
+              aria-expanded={showAccountManagement}
             >
-              Excluir conta permanentemente
+              <span className="flex items-center gap-3">
+                <MaterialIcon name="manage_accounts" className="text-xl text-white/45" />
+                <span>
+                  <span className="block text-sm font-semibold text-white/75">Gerenciar conta</span>
+                  <span className="block text-xs text-white/30">Ações avançadas da conta</span>
+                </span>
+              </span>
+              <MaterialIcon name={showAccountManagement ? 'expand_less' : 'expand_more'} className="text-white/30" />
             </button>
+
+            {showAccountManagement && (
+              <div className="space-y-3 border-t border-white/10 px-4 py-4">
+                <div className="rounded-xl border border-red-500/15 bg-red-500/[0.04] p-3">
+                  <p className="text-xs font-semibold text-white/65">Zona de risco</p>
+                  <p className="mt-1 text-xs leading-relaxed text-white/35">
+                    A exclusão remove sua conta e os dados vinculados no Supabase. Essa ação não pode ser desfeita.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setAccountAction('delete')}
+                  disabled={processingAccountAction}
+                  className="w-full rounded-xl border border-red-500/25 bg-transparent py-3 text-sm font-semibold text-red-300/80 disabled:opacity-50"
+                >
+                  Excluir minha conta
+                </button>
+              </div>
+            )}
           </div>
+          )}
 
           <ConfirmModal
             open={accountAction !== null}
@@ -787,11 +919,52 @@ function AccessibilityToggle({
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function SettingsRow({
+  icon,
+  title,
+  description,
+  onClick,
+  last = false,
+}: {
+  icon: string;
+  title: string;
+  description: string;
+  onClick: () => void;
+  last?: boolean;
+}) {
   return (
-    <div>
-      <p className="text-xs text-white/30">{label}</p>
-      <p className="font-semibold">{value}</p>
+    <button
+      onClick={onClick}
+      className={`flex w-full items-center gap-3 px-4 py-4 text-left active:bg-white/5 ${last ? '' : 'border-b border-white/[0.07]'}`}
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-500/10 text-primary-300">
+        <MaterialIcon name={icon} className="text-xl" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-bold text-white/80">{title}</span>
+        <span className="mt-0.5 block truncate text-xs text-white/35">{description}</span>
+      </span>
+      <MaterialIcon name="chevron_right" className="text-white/25" />
+    </button>
+  );
+}
+
+function ProfileMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 px-2">
+      <p className="truncate text-base font-black text-white/90">{value}</p>
+      <p className="mt-0.5 text-[10px] font-bold uppercase text-white/30">{label}</p>
+    </div>
+  );
+}
+
+function CompactGoal({ label, value, unit }: { label: string; value: string; unit: string }) {
+  return (
+    <div className="rounded-lg bg-white/[0.04] px-2 py-3 text-center">
+      <p className="text-base font-black text-primary-300">
+        {value}<span className="ml-0.5 text-[10px] font-bold text-primary-300/70">{unit}</span>
+      </p>
+      <p className="mt-1 truncate text-[9px] font-bold uppercase text-white/30">{label}</p>
     </div>
   );
 }
