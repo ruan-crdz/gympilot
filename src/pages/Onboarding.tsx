@@ -6,7 +6,8 @@ import { useCustomWorkoutStore } from '@/stores/useCustomWorkoutStore';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { supabase } from '@/lib/supabase';
 import type { WeekDay, Goal, BiologicalSex, ExperienceLevel, TrainingFocus, TrainingLocation } from '@/types';
-import { parseCsvList, toPositiveIntOrFallback } from '@/utils/profileMapping';
+import { toPositiveIntOrFallback } from '@/utils/profileMapping';
+import { TrainingContextFields } from '@/components/profile/TrainingContextFields';
 
 type Step = 'welcome' | 'tour1' | 'tour2' | 'tour3' | 'sex' | 'name' | 'body' | 'goal' | 'experience' | 'days' | 'personalization' | 'focus' | 'customSplit' | 'setup';
 
@@ -63,11 +64,10 @@ export function Onboarding({ onBack }: OnboardingProps) {
   const [days, setDays] = useState<WeekDay[]>(existingProfile?.trainingDays || []);
   const [sessionDurationMin, setSessionDurationMin] = useState(String(existingProfile?.sessionDurationMin || 60));
   const [trainingLocation, setTrainingLocation] = useState<TrainingLocation>(existingProfile?.trainingLocation || 'academia');
-  const [equipmentText, setEquipmentText] = useState((existingProfile?.equipmentAccess || []).join(', '));
-  const [trainingAgeMonths, setTrainingAgeMonths] = useState(existingProfile?.trainingAgeMonths ? String(existingProfile.trainingAgeMonths) : '');
-  const [preferredExercisesText, setPreferredExercisesText] = useState((existingProfile?.preferredExercises || []).join(', '));
-  const [dislikedExercisesText, setDislikedExercisesText] = useState((existingProfile?.dislikedExercises || []).join(', '));
-  const [limitationsText, setLimitationsText] = useState((existingProfile?.limitations || []).join(', '));
+  const [equipmentAccess, setEquipmentAccess] = useState<string[]>(existingProfile?.equipmentAccess || []);
+  const [preferredExercises, setPreferredExercises] = useState<string[]>(existingProfile?.preferredExercises || []);
+  const [dislikedExercises, setDislikedExercises] = useState<string[]>(existingProfile?.dislikedExercises || []);
+  const [limitations, setLimitations] = useState<string[]>(existingProfile?.limitations || []);
   const [focus, setFocus] = useState<TrainingFocus>(existingProfile?.trainingFocus || 'balanced');
   const [customSplit, setCustomSplit] = useState<Record<string, string>>(existingProfile?.customSplit || {});
 
@@ -134,7 +134,6 @@ export function Onboarding({ onBack }: OnboardingProps) {
   const weightNumber = Number(weight);
   const heightNumber = Number(height);
   const sessionDurationNumber = Number(sessionDurationMin);
-  const trainingAgeNumber = trainingAgeMonths ? Number(trainingAgeMonths) : undefined;
   const bodyValid = ageNumber >= 10 && ageNumber <= 100
     && weightNumber >= 30 && weightNumber <= 300
     && heightNumber >= 100 && heightNumber <= 250;
@@ -147,11 +146,10 @@ export function Onboarding({ onBack }: OnboardingProps) {
       aiPlan: 'free',
       sessionDurationMin: toPositiveIntOrFallback(sessionDurationNumber, 60),
       trainingLocation,
-      equipmentAccess: parseCsvList(equipmentText),
-      trainingAgeMonths: Number.isFinite(trainingAgeNumber || NaN) ? trainingAgeNumber : undefined,
-      preferredExercises: parseCsvList(preferredExercisesText),
-      dislikedExercises: parseCsvList(dislikedExercisesText),
-      limitations: parseCsvList(limitationsText),
+      equipmentAccess,
+      preferredExercises,
+      dislikedExercises,
+      limitations,
       ...(focus === 'custom' && Object.keys(customSplit).length > 0 ? { customSplit } : {}),
     });
   };
@@ -503,102 +501,20 @@ export function Onboarding({ onBack }: OnboardingProps) {
                 <p className="text-white/50">Esses dados ajudam a IA montar um plano mais preciso.</p>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm text-white/40 mb-1 block">Tempo disponível por sessão (min)</label>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min="20"
-                    max="180"
-                    value={sessionDurationMin}
-                    onChange={(e) => setSessionDurationMin(onlyInteger(e.target.value).slice(0, 3))}
-                    placeholder="60"
-                    className="input-field"
-                  />
-                  <PrivacyHint text="Tempo por sessão controla quantos exercícios/séries entram em cada treino." />
-                </div>
-
-                <div>
-                  <label className="text-sm text-white/40 mb-2 block">Onde você treina?</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { value: 'academia', label: 'Academia' },
-                      { value: 'casa', label: 'Casa' },
-                      { value: 'hibrido', label: 'Híbrido' },
-                    ].map((option) => (
-                      <button
-                        key={option.value}
-                        onClick={() => setTrainingLocation(option.value as TrainingLocation)}
-                        className={`py-3 rounded-xl text-sm font-semibold transition-all ${
-                          trainingLocation === option.value ? 'bg-primary-500 text-white' : 'bg-dark-200 text-white/50'
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-sm text-white/40 mb-1 block">Equipamentos disponíveis (separe por vírgula)</label>
-                  <input
-                    type="text"
-                    value={equipmentText}
-                    onChange={(e) => setEquipmentText(e.target.value)}
-                    placeholder="halteres, banco, barra, elástico"
-                    className="input-field"
-                  />
-                  <PrivacyHint text="Equipamentos evitam sugestões inviáveis para seu ambiente real." />
-                </div>
-
-                <div>
-                  <label className="text-sm text-white/40 mb-1 block">Há quantos meses você treina de forma consistente?</label>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min="0"
-                    max="600"
-                    value={trainingAgeMonths}
-                    onChange={(e) => setTrainingAgeMonths(onlyInteger(e.target.value).slice(0, 3))}
-                    placeholder="Ex: 8"
-                    className="input-field"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm text-white/40 mb-1 block">Exercícios que você gosta (vírgula)</label>
-                  <input
-                    type="text"
-                    value={preferredExercisesText}
-                    onChange={(e) => setPreferredExercisesText(e.target.value)}
-                    placeholder="supino, remada, agachamento"
-                    className="input-field"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm text-white/40 mb-1 block">Exercícios que você não gosta (vírgula)</label>
-                  <input
-                    type="text"
-                    value={dislikedExercisesText}
-                    onChange={(e) => setDislikedExercisesText(e.target.value)}
-                    placeholder="afundo, burpee"
-                    className="input-field"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm text-white/40 mb-1 block">Dores, lesões ou limitações (vírgula)</label>
-                  <textarea
-                    value={limitationsText}
-                    onChange={(e) => setLimitationsText(e.target.value)}
-                    placeholder="dor no ombro, lombar sensível"
-                    className="input-field min-h-20 resize-none"
-                  />
-                  <PrivacyHint text="Limitações físicas são usadas para bloquear exercícios de maior risco." />
-                </div>
-              </div>
+              <TrainingContextFields
+                sessionDurationMin={sessionDurationMin}
+                onSessionDurationChange={setSessionDurationMin}
+                trainingLocation={trainingLocation}
+                onTrainingLocationChange={setTrainingLocation}
+                equipmentAccess={equipmentAccess}
+                onEquipmentAccessChange={setEquipmentAccess}
+                preferredExercises={preferredExercises}
+                onPreferredExercisesChange={setPreferredExercises}
+                dislikedExercises={dislikedExercises}
+                onDislikedExercisesChange={setDislikedExercises}
+                limitations={limitations}
+                onLimitationsChange={setLimitations}
+              />
 
               <button className="btn-primary" onClick={() => setStep('focus')}>
                 Continuar

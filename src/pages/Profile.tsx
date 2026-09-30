@@ -9,14 +9,14 @@ import { useThemeStore, THEMES } from '@/stores/useThemeStore';
 import { useAccessibilityStore, type FontScale } from '@/stores/useAccessibilityStore';
 import { useCycleStore, CYCLE_PHASES } from '@/stores/useCycleStore';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
-import { CustomSelect } from '@/components/ui/CustomSelect';
+import { TrainingContextFields } from '@/components/profile/TrainingContextFields';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { supabase } from '@/lib/supabase';
 import { createUltimateCheckout, syncLatestPayment, syncPlanFromBackend } from '@/lib/billing';
 import { calculateTDEE, calculateMacros, calculateBMI } from '@/utils/calories';
 import { calculateWaterIntake } from '@/utils/water';
 import { clearGymPilotLocalData } from '@/utils/resetAppData';
-import { parseCsvList, toPositiveIntOrFallback } from '@/utils/profileMapping';
+import { toPositiveIntOrFallback } from '@/utils/profileMapping';
 import type { WeekDay, Goal, BiologicalSex, ExperienceLevel, TrainingLocation } from '@/types';
 
 const PENDING_BILLING_KEY = 'gympilot-pending-billing';
@@ -61,11 +61,10 @@ export function Profile() {
   const [days, setDays] = useState<WeekDay[]>(profile?.trainingDays || []);
   const [sessionDurationMin, setSessionDurationMin] = useState(String(profile?.sessionDurationMin || 60));
   const [trainingLocation, setTrainingLocation] = useState<TrainingLocation>(profile?.trainingLocation || 'academia');
-  const [trainingAgeMonths, setTrainingAgeMonths] = useState(String(profile?.trainingAgeMonths ?? ''));
-  const [equipmentAccess, setEquipmentAccess] = useState((profile?.equipmentAccess || []).join(', '));
-  const [preferredExercises, setPreferredExercises] = useState((profile?.preferredExercises || []).join(', '));
-  const [dislikedExercises, setDislikedExercises] = useState((profile?.dislikedExercises || []).join(', '));
-  const [limitations, setLimitations] = useState((profile?.limitations || []).join(', '));
+  const [equipmentAccess, setEquipmentAccess] = useState<string[]>(profile?.equipmentAccess || []);
+  const [preferredExercises, setPreferredExercises] = useState<string[]>(profile?.preferredExercises || []);
+  const [dislikedExercises, setDislikedExercises] = useState<string[]>(profile?.dislikedExercises || []);
+  const [limitations, setLimitations] = useState<string[]>(profile?.limitations || []);
 
   useEffect(() => {
     void syncPlanFromBackend().catch(() => undefined);
@@ -194,11 +193,10 @@ export function Profile() {
       trainingDays: days,
       sessionDurationMin: toPositiveIntOrFallback(sessionDurationMin, 60),
       trainingLocation,
-      trainingAgeMonths: trainingAgeMonths ? Number(trainingAgeMonths) : undefined,
-      equipmentAccess: parseCsvList(equipmentAccess),
-      preferredExercises: parseCsvList(preferredExercises),
-      dislikedExercises: parseCsvList(dislikedExercises),
-      limitations: parseCsvList(limitations),
+      equipmentAccess,
+      preferredExercises,
+      dislikedExercises,
+      limitations,
     });
     setEditing(false);
   };
@@ -214,11 +212,10 @@ export function Profile() {
     setDays(profile.trainingDays || []);
     setSessionDurationMin(String(profile.sessionDurationMin || 60));
     setTrainingLocation(profile.trainingLocation || 'academia');
-    setTrainingAgeMonths(String(profile.trainingAgeMonths ?? ''));
-    setEquipmentAccess((profile.equipmentAccess || []).join(', '));
-    setPreferredExercises((profile.preferredExercises || []).join(', '));
-    setDislikedExercises((profile.dislikedExercises || []).join(', '));
-    setLimitations((profile.limitations || []).join(', '));
+    setEquipmentAccess([...(profile.equipmentAccess || [])]);
+    setPreferredExercises([...(profile.preferredExercises || [])]);
+    setDislikedExercises([...(profile.dislikedExercises || [])]);
+    setLimitations([...(profile.limitations || [])]);
     setShowSettings(false);
     setEditing(true);
   };
@@ -559,62 +556,22 @@ export function Profile() {
             </div>
           </div>
 
-          <div className="card space-y-3">
+          <div className="card space-y-4">
             <h2 className="font-semibold text-white/80">Contexto de treino</h2>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm text-white/40 mb-1 block">Tempo por sessão (min)</label>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min="20"
-                  max="180"
-                  value={sessionDurationMin}
-                  onChange={(e) => setSessionDurationMin(e.target.value.replace(/\D/g, '').slice(0, 3))}
-                  className="input-field"
-                />
-              </div>
-              <div>
-                <label className="text-sm text-white/40 mb-1 block">Local</label>
-                <CustomSelect
-                  value={trainingLocation}
-                  onChange={(value) => setTrainingLocation(value as TrainingLocation)}
-                  options={[
-                    { value: 'academia', label: 'Academia' },
-                    { value: 'casa', label: 'Casa' },
-                    { value: 'hibrido', label: 'Híbrido' },
-                  ]}
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="text-sm text-white/40 mb-1 block">Training age (meses consistentes)</label>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min="0"
-                  max="600"
-                  value={trainingAgeMonths}
-                  onChange={(e) => setTrainingAgeMonths(e.target.value.replace(/\D/g, '').slice(0, 3))}
-                  className="input-field"
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="text-sm text-white/40 mb-1 block">Equipamentos (vírgula)</label>
-                <input value={equipmentAccess} onChange={(e) => setEquipmentAccess(e.target.value)} className="input-field" placeholder="halteres, barra, banco" />
-              </div>
-              <div className="col-span-2">
-                <label className="text-sm text-white/40 mb-1 block">Exercícios preferidos (vírgula)</label>
-                <input value={preferredExercises} onChange={(e) => setPreferredExercises(e.target.value)} className="input-field" placeholder="supino, remada" />
-              </div>
-              <div className="col-span-2">
-                <label className="text-sm text-white/40 mb-1 block">Exercícios que não gosta (vírgula)</label>
-                <input value={dislikedExercises} onChange={(e) => setDislikedExercises(e.target.value)} className="input-field" placeholder="afundo, burpee" />
-              </div>
-              <div className="col-span-2">
-                <label className="text-sm text-white/40 mb-1 block">Limitações / dores (vírgula)</label>
-                <textarea value={limitations} onChange={(e) => setLimitations(e.target.value)} className="input-field min-h-20 resize-none" placeholder="ombro, joelho, lombar" />
-              </div>
-            </div>
+            <TrainingContextFields
+              sessionDurationMin={sessionDurationMin}
+              onSessionDurationChange={setSessionDurationMin}
+              trainingLocation={trainingLocation}
+              onTrainingLocationChange={setTrainingLocation}
+              equipmentAccess={equipmentAccess}
+              onEquipmentAccessChange={setEquipmentAccess}
+              preferredExercises={preferredExercises}
+              onPreferredExercisesChange={setPreferredExercises}
+              dislikedExercises={dislikedExercises}
+              onDislikedExercisesChange={setDislikedExercises}
+              limitations={limitations}
+              onLimitationsChange={setLimitations}
+            />
           </div>
         </div>
       ) : (
