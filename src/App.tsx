@@ -11,6 +11,7 @@ import { Auth } from '@/pages/Auth';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { pushLocalStateToCloud, replaceLocalStateFromCloud } from '@/lib/accountState';
 import { syncPlanFromBackend } from '@/lib/billing';
+import { InstallGuide, type BeforeInstallPromptEvent } from '@/pages/InstallGuide';
 
 function hasPendingRecoveryAction() {
   const url = new URL(window.location.href);
@@ -33,6 +34,14 @@ const AISetup = lazy(() => import('@/pages/AISetup').then((module) => ({ default
 const AIReeval = lazy(() => import('@/pages/AIReeval').then((module) => ({ default: module.AIReeval })));
 const Health = lazy(() => import('@/pages/Health').then((module) => ({ default: module.Health })));
 const Social = lazy(() => import('@/pages/Social').then((module) => ({ default: module.Social })));
+const AdminDashboard = lazy(() => import('@/pages/AdminDashboard').then((module) => ({ default: module.AdminDashboard })));
+
+const INSTALL_GUIDE_KEY = 'gympilot-install-guide-seen';
+
+function isStandaloneApp() {
+  return window.matchMedia('(display-mode: standalone)').matches
+    || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+}
 
 function RouteFallback() {
   return (
@@ -58,6 +67,27 @@ export function App() {
   const [syncingAccount, setSyncingAccount] = useState(false);
   const [syncError, setSyncError] = useState('');
   const [recoveryActionActive, setRecoveryActionActive] = useState(hasPendingRecoveryAction());
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installGuideSeen, setInstallGuideSeen] = useState(() => isStandaloneApp() || localStorage.getItem(INSTALL_GUIDE_KEY) === '1');
+
+  useEffect(() => {
+    const handleInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+    const handleInstalled = () => {
+      localStorage.setItem(INSTALL_GUIDE_KEY, '1');
+      setInstallGuideSeen(true);
+      setInstallPrompt(null);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleInstallPrompt);
+    window.addEventListener('appinstalled', handleInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleInstallPrompt);
+      window.removeEventListener('appinstalled', handleInstalled);
+    };
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowSplash(false), 1800);
@@ -248,6 +278,20 @@ export function App() {
   }
 
   if (!session) {
+    if (!installGuideSeen && !recoveryActionActive) {
+      return (
+        <ThemeProvider>
+          <InstallGuide
+            installPrompt={installPrompt}
+            onContinue={() => {
+              localStorage.setItem(INSTALL_GUIDE_KEY, '1');
+              setInstallGuideSeen(true);
+            }}
+          />
+          <AppStatusBadge />
+        </ThemeProvider>
+      );
+    }
     return (
       <ThemeProvider>
         <Auth onResetFlowComplete={() => setRecoveryActionActive(false)} />
@@ -303,6 +347,7 @@ export function App() {
               <Route path="/onboarding" element={<Onboarding />} />
               <Route path="/ai/intro" element={<AIIntro />} />
               <Route path="/ai" element={<AIChat />} />
+              <Route path="/admin" element={<AdminDashboard />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </AppShell>

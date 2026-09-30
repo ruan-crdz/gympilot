@@ -45,6 +45,7 @@ export function Profile() {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsSection, setSettingsSection] = useState<'health' | 'appearance' | 'ai' | 'account' | null>(null);
   const [showAccountManagement, setShowAccountManagement] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [accountAction, setAccountAction] = useState<'delete' | null>(null);
   const [processingAccountAction, setProcessingAccountAction] = useState(false);
   const [upgradingPlan, setUpgradingPlan] = useState(false);
@@ -68,6 +69,22 @@ export function Profile() {
 
   useEffect(() => {
     void syncPlanFromBackend().catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!supabase) return;
+    const client = supabase;
+    let cancelled = false;
+    void client.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return;
+      const { data: admin } = await client
+        .from('app_admins')
+        .select('user_id')
+        .eq('user_id', data.user.id)
+        .maybeSingle();
+      if (!cancelled) setIsAdmin(Boolean(admin));
+    });
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -323,6 +340,22 @@ export function Profile() {
             <span className="text-sm font-bold text-white/80">Configurações</span>
           </button>
         </div>
+
+        {isAdmin && (
+          <button
+            onClick={() => navigate('/admin')}
+            className="flex w-full items-center justify-between rounded-xl border border-primary-500/25 bg-primary-500/10 px-4 py-4 text-left"
+          >
+            <span className="flex items-center gap-3">
+              <MaterialIcon name="admin_panel_settings" className="text-2xl text-primary-300" />
+              <span>
+                <span className="block text-sm font-black text-white/85">Dashboard administrativo</span>
+                <span className="block text-xs text-white/40">Usuários, retenção, receita e produto</span>
+              </span>
+            </span>
+            <MaterialIcon name="chevron_right" className="text-primary-300" />
+          </button>
+        )}
 
         <section className="card space-y-3">
           <div className="flex items-center justify-between">
