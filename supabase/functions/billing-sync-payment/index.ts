@@ -79,7 +79,7 @@ serve(async (req) => {
 
   const paymentId = String(payment.id || '');
   const status = typeof payment.status === 'string' ? payment.status : 'pending';
-  await serviceClient
+  const { error: checkoutUpdateError } = await serviceClient
     .from('billing_checkout_sessions')
     .update({
       status: status === 'approved' ? 'approved' : status,
@@ -87,6 +87,10 @@ serve(async (req) => {
       provider_payload: payment,
     })
     .eq('id', checkout.id);
+
+  if (checkoutUpdateError) {
+    return jsonResponse({ error: { message: 'Falha ao atualizar o status do pagamento.' } }, 500);
+  }
 
   if (status !== 'approved' || !paymentId) return jsonResponse({ success: true, status: 'pending' });
 

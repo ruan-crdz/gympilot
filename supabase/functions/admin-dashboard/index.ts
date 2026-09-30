@@ -47,8 +47,8 @@ serve(async (req) => {
 
   const [snapshotsResult, subscriptionsResult, checkoutsResult, programsResult, postsResult, commentsResult] = await Promise.all([
     serviceClient.from('user_app_snapshots').select('user_id, updated_at'),
-    serviceClient.from('user_ai_subscriptions').select('user_id, status, current_period_end'),
-    serviceClient.from('billing_checkout_sessions').select('user_id, status, amount_cents, created_at'),
+    serviceClient.from('user_ai_subscriptions').select('user_id, status, current_period_end, provider, provider_payment_id, billing_cycle'),
+    serviceClient.from('billing_checkout_sessions').select('id, user_id, status, amount_cents, billing_cycle, provider_payment_id, created_at'),
     serviceClient.from('user_workout_programs').select('user_id').eq('status', 'active'),
     serviceClient.from('social_posts').select('id', { count: 'exact', head: true }).is('deleted_at', null),
     serviceClient.from('social_post_comments').select('id', { count: 'exact', head: true }).is('deleted_at', null),
@@ -66,9 +66,35 @@ serve(async (req) => {
   const ultimateIds = new Set(subscriptions
     .filter((row) => row.status === 'active' && (!row.current_period_end || row.current_period_end > new Date().toISOString()))
     .map((row) => row.user_id));
+  const paymentSubscriptions = subscriptions.filter((row) => row.provider === 'mercadopago' && row.provider_payment_id);
+  const representedPaymentIds = new Set(paymentSubscriptions.map((row) => row.provider_payment_id));
+  const matchedCheckoutIds = new Set<string>();
+  let approvedRevenueCents = 0;
+
+  // A provider payment id on a subscription is only persisted after Mercado Pago
+  // confirms approval. Use it as the source of truth if a checkout status lagged.
+  for (const subscription of paymentSubscriptions) {
+    const checkout = checkouts.find((row) => row.provider_payment_id === subscription.provider_payment_id)
+      || checkouts
+        .filter((row) => row.user_id === subscription.user_id && row.billing_cycle === subscription.billing_cycle)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+    if (checkout && !matchedCheckoutIds.has(checkout.id)) {
+      approvedRevenueCents += Number(checkout.amount_cents || 0);
+      matchedCheckoutIds.add(checkout.id);
+    }
+  }
+
   const approvedCheckouts = checkouts.filter((row) => row.status === 'approved');
+  for (const checkout of approvedCheckouts) {
+    const alreadyRepresented = matchedCheckoutIds.has(checkout.id)
+      || Boolean(checkout.provider_payment_id && representedPaymentIds.has(checkout.provider_payment_id));
+    if (!alreadyRepresented) approvedRevenueCents += Number(checkout.amount_cents || 0);
+  }
   const checkoutUserIds = new Set(checkouts.map((row) => row.user_id));
-  const approvedUserIds = new Set(approvedCheckouts.map((row) => row.user_id));
+  const approvedUserIds = new Set([
+    ...approvedCheckouts.map((row) => row.user_id),
+    ...paymentSubscriptions.map((row) => row.user_id),
+  ]);
   const totalUsers = users.length;
 
   return jsonResponse({
@@ -90,7 +116,7 @@ serve(async (req) => {
       checkoutUsers: checkoutUserIds.size,
       approvedUsers: approvedUserIds.size,
       checkoutConversionPercent: checkoutUserIds.size ? Math.round((approvedUserIds.size / checkoutUserIds.size) * 1000) / 10 : 0,
-      approvedRevenueBrl: approvedCheckouts.reduce((sum, row) => sum + Number(row.amount_cents || 0), 0) / 100,
+      approvedRevenueBrl: approvedRevenueCents / 100,
     },
     product: {
       activeWorkoutPrograms: new Set((programsResult.data || []).map((row) => row.user_id)).size,
