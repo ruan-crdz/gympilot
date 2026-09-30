@@ -108,7 +108,7 @@ export function Profile() {
       return;
     }
 
-    if (!localStorage.getItem(PENDING_BILLING_KEY)) return;
+    const shouldKeepPolling = Boolean(localStorage.getItem(PENDING_BILLING_KEY));
 
     let cancelled = false;
     let attempts = 0;
@@ -132,7 +132,7 @@ export function Profile() {
         // The provider may still be processing the payment. Retry briefly.
       }
 
-      if (!cancelled && attempts < 40) {
+      if (!cancelled && shouldKeepPolling && attempts < 40) {
         timer = window.setTimeout(checkPayment, 3000);
       }
     };
@@ -142,8 +142,10 @@ export function Profile() {
     };
 
     void checkPayment();
-    window.addEventListener('focus', checkWhenVisible);
-    document.addEventListener('visibilitychange', checkWhenVisible);
+    if (shouldKeepPolling) {
+      window.addEventListener('focus', checkWhenVisible);
+      document.addEventListener('visibilitychange', checkWhenVisible);
+    }
 
     return () => {
       cancelled = true;
