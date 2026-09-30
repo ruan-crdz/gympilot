@@ -45,3 +45,22 @@ export async function createUltimateCheckout(cycle: BillingCycle): Promise<{ che
 
   return { checkoutUrl: payload.checkoutUrl };
 }
+
+export async function syncLatestPayment(): Promise<'approved' | 'pending' | 'not_found'> {
+  if (!supabase) return 'not_found';
+
+  const { data, error } = await supabase.functions.invoke('billing-sync-payment', {
+    body: {},
+  });
+
+  if (error) throw new Error(error.message || 'Falha ao consultar o pagamento.');
+
+  const payload = (data || {}) as { success?: boolean; status?: string; error?: { message?: string } };
+  if (!payload.success) {
+    throw new Error(payload.error?.message || 'Nao foi possivel consultar o pagamento.');
+  }
+
+  if (payload.status === 'approved') return 'approved';
+  if (payload.status === 'pending') return 'pending';
+  return 'not_found';
+}

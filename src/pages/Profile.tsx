@@ -12,7 +12,7 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { CustomSelect } from '@/components/ui/CustomSelect';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { supabase } from '@/lib/supabase';
-import { createUltimateCheckout, syncPlanFromBackend } from '@/lib/billing';
+import { createUltimateCheckout, syncLatestPayment, syncPlanFromBackend } from '@/lib/billing';
 import { calculateTDEE, calculateMacros, calculateBMI, bmiCategory } from '@/utils/calories';
 import { calculateWaterIntake } from '@/utils/water';
 import { clearGymPilotLocalData } from '@/utils/resetAppData';
@@ -24,6 +24,8 @@ const TRAINING_LOCATION_LABELS: Record<TrainingLocation, string> = {
   casa: 'Casa',
   hibrido: 'Híbrido',
 };
+
+const PENDING_BILLING_KEY = 'gympilot-pending-billing';
 
 export function Profile() {
   const navigate = useNavigate();
@@ -81,14 +83,15 @@ export function Profile() {
     };
 
     if (billingResult === 'success') {
+      localStorage.setItem(PENDING_BILLING_KEY, String(Date.now()));
       toast('Pagamento recebido. Atualizando seu plano...', 'success');
-      void syncPlanFromBackend().catch(() => undefined);
       clearBillingQuery();
       return;
     }
 
     if (billingResult === 'pending') {
-      toast('Pagamento pendente. Assim que aprovar, o Ultimate será liberado.', 'info');
+      localStorage.setItem(PENDING_BILLING_KEY, String(Date.now()));
+      toast('Confirmando pagamento. O Ultimate será liberado automaticamente.', 'info');
       clearBillingQuery();
       return;
     }
@@ -98,6 +101,57 @@ export function Profile() {
       clearBillingQuery();
     }
   }, [toast]);
+
+  useEffect(() => {
+    if (aiPlan === 'ultimate') {
+      localStorage.removeItem(PENDING_BILLING_KEY);
+      return;
+    }
+
+    if (!localStorage.getItem(PENDING_BILLING_KEY)) return;
+
+    let cancelled = false;
+    let attempts = 0;
+    let timer: number | undefined;
+
+    const checkPayment = async () => {
+      if (cancelled || document.hidden) return;
+      attempts += 1;
+
+      try {
+        const status = await syncLatestPayment();
+        if (status === 'approved') {
+          const plan = await syncPlanFromBackend();
+          if (!cancelled && plan === 'ultimate') {
+            localStorage.removeItem(PENDING_BILLING_KEY);
+            toast('Pagamento aprovado. Ultimate liberado!', 'success');
+            return;
+          }
+        }
+      } catch {
+        // The provider may still be processing the payment. Retry briefly.
+      }
+
+      if (!cancelled && attempts < 40) {
+        timer = window.setTimeout(checkPayment, 3000);
+      }
+    };
+
+    const checkWhenVisible = () => {
+      if (!document.hidden) void checkPayment();
+    };
+
+    void checkPayment();
+    window.addEventListener('focus', checkWhenVisible);
+    document.addEventListener('visibilitychange', checkWhenVisible);
+
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+      window.removeEventListener('focus', checkWhenVisible);
+      document.removeEventListener('visibilitychange', checkWhenVisible);
+    };
+  }, [aiPlan, toast]);
 
   if (!profile) return null;
 
@@ -174,6 +228,7 @@ export function Profile() {
     setUpgradingPlan(true);
     try {
       const { checkoutUrl } = await createUltimateCheckout(cycle);
+      localStorage.setItem(PENDING_BILLING_KEY, String(Date.now()));
       window.location.href = checkoutUrl;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Não consegui iniciar o checkout agora.';
