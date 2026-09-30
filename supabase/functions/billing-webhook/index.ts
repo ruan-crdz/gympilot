@@ -107,10 +107,14 @@ serve(async (req) => {
   };
 
   if (externalReference) {
-    await serviceClient
+    const { error: checkoutUpdateError } = await serviceClient
       .from('billing_checkout_sessions')
       .update(checkoutUpdate)
       .eq('provider_reference', externalReference);
+
+    if (checkoutUpdateError) {
+      return jsonResponse({ error: { message: 'Falha ao atualizar a sessao de checkout.' } }, 500);
+    }
   }
 
   if (status !== 'approved') {
@@ -119,9 +123,20 @@ serve(async (req) => {
 
   const periodEnd = periodEndForCycle(cycle);
 
-  await serviceClient
+  const { data: existingSubscription, error: existingSubscriptionError } = await serviceClient
     .from('user_ai_subscriptions')
-    .insert({
+    .select('id')
+    .eq('provider_payment_id', String(paymentId))
+    .maybeSingle();
+
+  if (existingSubscriptionError) {
+    return jsonResponse({ error: { message: 'Falha ao verificar pagamento processado.' } }, 500);
+  }
+
+  if (!existingSubscription) {
+    const { error: subscriptionError } = await serviceClient
+      .from('user_ai_subscriptions')
+      .insert({
       user_id: userId,
       plan: 'ultimate',
       status: 'active',
@@ -133,6 +148,11 @@ serve(async (req) => {
       current_period_end: periodEnd,
       note: `Pagamento aprovado (${cycle})`,
     });
+
+    if (subscriptionError) {
+      return jsonResponse({ error: { message: 'Pagamento aprovado, mas houve falha ao liberar o Ultimate.' } }, 500);
+    }
+  }
 
   return jsonResponse({ success: true, status: 'approved', userId, cycle, periodEnd });
 });

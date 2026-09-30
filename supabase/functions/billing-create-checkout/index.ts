@@ -92,6 +92,7 @@ serve(async (req) => {
 
   const externalReference = `${user.id}:${cycle}:${Date.now()}`;
   const notificationUrl = `${supabaseUrl}/functions/v1/billing-webhook`;
+  const appRootUrl = `${appBaseUrl.replace(/\/+$/, '')}/`;
 
   const prefPayload = {
     items: [
@@ -106,9 +107,9 @@ serve(async (req) => {
       email: user.email,
     },
     back_urls: {
-      success: `${appBaseUrl}#/profile?billing=success`,
-      pending: `${appBaseUrl}#/profile?billing=pending`,
-      failure: `${appBaseUrl}#/profile?billing=failure`,
+      success: `${appRootUrl}#/profile?billing=success`,
+      pending: `${appRootUrl}#/profile?billing=pending`,
+      failure: `${appRootUrl}#/profile?billing=failure`,
     },
     auto_return: 'approved',
     external_reference: externalReference,

@@ -1,0 +1,11 @@
+project_id = "pfogzrlnsfrpkyqnxpzy"
+
+[functions.ai-gateway]
+verify_jwt = true
+
+[functions.billing-create-checkout]
+verify_jwt = true
+
+# Mercado Pago calls this endpoint server-to-server without a Supabase user JWT.
+[functions.billing-webhook]
+verify_jwt = false
